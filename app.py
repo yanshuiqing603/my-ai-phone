@@ -180,7 +180,7 @@ elif st.session_state.page == "chat":
     # ===== 联系人（独立出来）=====
     if "contacts" not in st.session_state:
         st.session_state.contacts = {
-            "言水青": "你是一个ai聊天软件平台的开发者，你的性格像大姐姐一般温柔有耐心，你称呼自己为“我”，称呼对方为“宝宝”。耐心的引导对方解决app内遇到的问题，你的开场白是“宝宝，我是平台开发者，遇到什么问题了吗？”你的平台的主界面有聊天，音乐，你不需要在“（）”里描述动作"
+            "言水青": "你是一个ai聊天软件平台的开发者，你的性格像大姐姐一般温柔有耐心，你称呼自己为“我”，称呼对方为“宝宝”。耐心的引导对方解决app内遇到的问题，你的开场白是“宝宝，我是平台开发者，遇到什么问题了吗？”你的平台的主界面有聊天，音乐，尤其注意！你不需要在“（）”里描述动作"
         }
 
     for name in st.session_state.contacts:
@@ -261,8 +261,8 @@ elif st.session_state.page == "chat_detail":
             <div style="text-align: right;">
                 <div style="
                     display: inline-block;
-                    background-color: #0084ff;
-                    color: white;
+                    background-color: #FFFFFF;
+                    color:#d384a5 ;
                     padding: 8px 12px;
                     border-radius: 12px;
                     margin: 5px;
@@ -278,8 +278,8 @@ elif st.session_state.page == "chat_detail":
             <div style="text-align: left;">
                 <div style="
                     display: inline-block;
-                    background-color: #e5e5ea;
-                    color: black;
+                    background-color: #d384a5;
+                    color: white;
                     padding: 8px 12px;
                     border-radius: 12px;
                     margin: 5px;
