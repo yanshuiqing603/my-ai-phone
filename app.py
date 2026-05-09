@@ -95,7 +95,7 @@ def call_api(messages):
     url,
     headers=headers,
     json=data,
-    timeout=10,
+    timeout=120,
     proxies={"http": None, "https": None}  # 👈 加这个
 )
     except Exception as e:
