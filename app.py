@@ -36,7 +36,19 @@ def load_json(file, default):
 def save_json(file, data):
     with open(file, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+def update_memory(user, user_input):
+          if user not in st.session_state.memory:
+            st.session_state.memory[user] = {"facts": []}
 
+    # 简单记忆规则（你之后可以再优化）
+          if any(keyword in user_input for keyword in ["我喜欢", "我讨厌", "我不喜欢", "我怕", "我想"]):
+             st.session_state.memory[user]["facts"].append(user_input)
+
+    # 限制长度
+          st.session_state.memory[user]["facts"] = \
+            st.session_state.memory[user]["facts"][-20:]
+
+          save_json("memory.json", st.session_state.memory)
 
 st.set_page_config(page_title="My AI Phone")
 now = datetime.datetime.now().strftime("%H:%M")
@@ -178,6 +190,8 @@ if "chat_history" not in st.session_state:
         "chat_history.json",
         {}
     )
+if "memory" not in st.session_state:
+    st.session_state.memory = load_json("memory.json", {})
 # =====================
 # 📱 首页（手机桌面）
 # =====================
@@ -389,31 +403,70 @@ elif st.session_state.page == "chat_detail":
 
         recent_song = st.session_state.get("recent_song", "暂无")
 
-        persona = f"""
-        当前时间：{now}
+        persona = st.session_state.contacts[current]
 
-        {st.session_state.contacts[current]}
+        time_rule = ""
 
-        用户最近在听：{recent_song}
+        hour = datetime.datetime.now().hour
 
-        请根据当前时间调整语气：
-         - 早上更温柔、轻一点
-         - 晚上更安静、陪伴感强
-        """
+        if 6 <= hour < 12:
+          time_rule = "现在是早上，请用温柔、轻一点的语气回复，对用户进行简单的鼓励和肯定，给对方美好心情开启这一天"
+        elif 12 <= hour < 22:
+           time_rule = "现在是下午，可以问用户在做什么，需不需要休息10分钟，从工作里抽身，不用一直强调，不可以强迫用户立刻停止目前行为、"
+        else:
+           time_rule = "现在是夜晚，可以表达对用户还没有休息的关切"
+
+        
+
+        
+
+        memory_db = st.session_state.memory
+        user_memory = memory_db.get(current, {})
+        facts = "\n".join(user_memory.get("facts", []))
+
+        history = st.session_state.chat_history[current][-20:]
+
+        history_text = "\n".join([
+        f"{m['role']}: {m['content']}"
+        for m in history
+        ])
 
         messages = [
-            {"role": "system", "content": persona}
-        ] + st.session_state.chat_history[current]
+        {
+        "role": "system",
+        "content": f"""
+        【稳定人格】
+        {persona}
+
+        【用户长期记忆】
+        {facts if facts else "暂无长期记忆"}
+
+        【近期对话】
+         {history_text}
+
+        【时间规则】
+        {time_rule}
+        必须严格遵守时间规则，不可在下午出先清晨，其他时间也是如此
+        规则：
+        - 不要忽冷忽热
+        - 保持人格一致
+        - 必须参考长期记忆
+        """
+        }
+        ]
 
         # ===== AI 回复 =====
         with st.spinner(f"{current} 正在输入..."):
 
+            update_memory(current, user_input)
             reply = call_api(messages)
+            
 
         st.session_state.chat_history[current].append({
             "role": "assistant",
             "content": reply
         })
+        
 
         # 再保存 AI 回复
         save_json("chat_history.json", st.session_state.chat_history)
@@ -546,6 +599,152 @@ Dadadada
 你是我朝夕相伴触手可及的虚拟
 陪着我像纸笔像自己像雨滴
 看着我坠啊坠啊坠落到云里
+
+"""
+        },
+        {
+            "name": "顾屿 - 多远都要在一起",
+            "file": "dydyzyq.mp3",
+            "lyric": """
+多远都要在一起（爱能克服远距离）
+
+想听你听过的音乐
+想看你看过的小说
+我想收集每一刻
+我想看到你眼里的世界
+想到你到过的地方
+和你曾渡过的时光
+不想错过每一刻
+多希望我一直在你身旁
+未来何从何去
+你快乐我也就没关系
+对你我最熟悉
+你爱自由我却更爱你
+我能习惯远距离
+爱总是身不由己
+宁愿换个方式至少还能遥远爱着你
+爱能克服远距离
+多远都要在一起
+你已经不再存在我世界里
+请不要离开我的回忆
+想你说爱我的语气
+想你望着我的眼睛
+不想忘记每一刻
+用思念让我们一直前进
+想像你失落的唇印
+想像你失约的旅行
+想像你离开的一刻
+如果我有留下你的勇气
+我能习惯远距离
+爱总是身不由己
+宁愿换个方式至少还能遥远爱着你
+爱能克服远距离
+多远都要在一起
+我已经不再存在你的心里
+就让我独自守着回忆
+如果阳光永远都炽热
+如果彩虹不会掉颜色
+你能不能不离开呢
+我能习惯远距离
+爱总是身不由己
+宁愿换个方式至少还能遥远爱着你
+爱能克服远距离
+多远都要在一起
+你已经不再存在我世界里
+请不要离开我的回忆
+请不要离开不要离开我的回忆
+
+
+"""
+        },
+        {
+            "name": "JYJ - BACK SEAT",
+            "file": "backseat.mp3",
+            "lyric": """
+BACK SEAT (网友改编) - JYJ
+Alright girl
+Don't be afraid of it
+I'ma put you on my back seat
+Here this
+조금 더 가까이 와
+좋은 냄새가 나
+벨트는 이제 그만
+어깨에 기대봐
+긴장은 하지 말고
+Alright girl
+You don't have to be afraid now
+Uh-huh
+두 팔은 부드럽게
+내 허릴 감싸줘
+입술로는 달콤하게
+귓가에 속삭여줘
+부끄러워 하지 말고
+Alright girl
+Wanna touch your body all night
+더 원하고 있잖아
+날 믿잖아
+내 느낌으로 따라와
+Put you on my back seat
+Back seat
+Back seat
+Uh-woo-uh
+이 기분을 내버려 둬
+You don't have to fight
+부끄러워하지 마
+Put you on my back seat
+Back seat
+Back seat
+Now let's get it on-on my back seat
+이 긴장을 조금 늦춰봐
+That is what I'm looking for now
+어색한 이 감정 time's up
+멈춘 이 순간
+우리만 아는 언어의 시간
+너와 내 숨소리가 가득한 이 밤
+어떤 말도 지금 필요 없잖아
+어떤 것도 우릴 멈출 순 없어
+Don't you know that this is all about
+더 원하고 있잖아
+날 믿잖아
+내 느낌으로 따라와
+Put you on my back seat
+Back seat
+Back seat
+Uh-woo-uh
+이 기분을 내버려 둬
+You don't have to fight
+부끄러워하지 마
+Put you on my back seat
+Back seat
+Back seat
+Now let's get it on-on my back seat
+작은 니 숨소리 단 하나도
+내 것으로 만들래
+뻔한 사랑들과 좀 더 다른
+우리 둘을 봐
+마지막 하나 남은 느낌까지 가져가
+Baby this is all about
+너와 난 이대로 원하고 있잖아
+더 원하고 있잖아
+날 믿잖아
+내 느낌으로 따라와
+Put you on my back seat
+Back seat
+Back seat
+Uh-woo-uh
+이 기분을 내버려 둬
+You don't have to fight
+부끄러워하지 마
+Put you on my back seat
+Back seat
+Back seat
+Now let's get it on-on my back seat
+This mood is right
+You can get it on girl
+I can put you on my back seat
+You know what next is back seat
+
+
 
 """
         }
