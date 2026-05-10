@@ -204,7 +204,7 @@ if st.session_state.page == "home":
             st.rerun()
     with col4:
        if st.button("📚\n历史聊天记录", use_container_width=True):
-            st.session_state.page = "histor"
+            st.session_state.page = "history"
             st.rerun()
 
 # =====================
@@ -687,7 +687,8 @@ elif st.session_state.page == "settings":
 #  📚 聊天记录
 # =====================
 elif st.session_state.page == "history":
-
+    if "chat_history" not in st.session_state:
+      st.session_state.chat_history = load_json("chat_history.json", {})
     st.title("📚 聊天记录")
 
     # ===== 返回 =====
