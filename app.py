@@ -3,12 +3,45 @@ import json
 import requests
 
 import datetime
+import os
+import os
 
+# ===== 读取JSON =====
+def load_json(file, default):
+
+    if os.path.exists(file):
+
+        try:
+            with open(file, "r", encoding="utf-8") as f:
+                return json.load(f)
+
+        except:
+            return default
+
+    return default
+
+
+# ===== 保存JSON =====
+def save_json(file, data):
+
+    with open(file, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+def load_json(file, default):
+    if os.path.exists(file):
+        with open(file, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return default
+
+
+def save_json(file, data):
+    with open(file, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+st.set_page_config(page_title="My AI Phone")
 now = datetime.datetime.now().strftime("%H:%M")
 st.markdown(f"📶  WiFi   🔋 100%   {now}")
 st.divider()
-
-st.set_page_config(page_title="My AI Phone")
 st.markdown("""
 <style>
 
@@ -139,6 +172,12 @@ if "music_index" not in st.session_state:
 
 if "play_mode" not in st.session_state:
     st.session_state.play_mode = "列表循环"
+if "chat_history" not in st.session_state:
+
+    st.session_state.chat_history = load_json(
+        "chat_history.json",
+        {}
+    )
 # =====================
 # 📱 首页（手机桌面）
 # =====================
@@ -147,7 +186,7 @@ if st.session_state.page == "home":
 
     st.write("")  # 留点空白更像手机
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3,col4 = st.columns(4)
 
     with col1:
         if st.button("💬\n聊天", use_container_width=True):
@@ -162,6 +201,10 @@ if st.session_state.page == "home":
     with col3:
        if st.button("⚙️\n设置", use_container_width=True):
             st.session_state.page = "settings"
+            st.rerun()
+    with col4:
+       if st.button("📚\n历史聊天记录", use_container_width=True):
+            st.session_state.page = "histor"
             st.rerun()
 
 # =====================
@@ -179,9 +222,12 @@ elif st.session_state.page == "chat":
 
     # ===== 联系人（独立出来）=====
     if "contacts" not in st.session_state:
-        st.session_state.contacts = {
+      st.session_state.contacts = load_json(
+        "contacts.json",
+        {
             "言水青": "你是一个ai聊天软件平台的开发者，你的性格像大姐姐一般温柔有耐心，你称呼自己为“我”，称呼对方为“宝宝”。耐心的引导对方解决app内遇到的问题，你的开场白是“宝宝，我是平台开发者，遇到什么问题了吗？”你的平台的主界面有聊天，音乐，尤其注意！你不需要在“（）”里描述动作"
         }
+      )
 
     for name in st.session_state.contacts:
         if st.button(f"👤 {name}", use_container_width=True):
@@ -199,14 +245,47 @@ elif st.session_state.page == "chat":
         if st.button("添加"):
             if new_name and new_persona:
                 st.session_state.contacts[new_name] = new_persona
+                save_json("contacts.json", st.session_state.contacts)
                 st.rerun()
+    st.divider()
 
+    st.subheader("⚙️ 编辑人设")
+
+    edit_name = st.selectbox(
+      "选择联系人",
+      list(st.session_state.contacts.keys())
+      )
+
+    edit_persona = st.text_area(
+      "修改人设",
+    value=st.session_state.contacts[edit_name],
+    height=200
+    )
+
+    if st.button("保存人设修改"):
+
+      st.session_state.contacts[edit_name] = edit_persona
+
+      save_json(
+        "contacts.json",
+        st.session_state.contacts
+    )
+
+    st.success("已保存")
 
    
 
 elif st.session_state.page == "chat_detail":
 
-    current = st.session_state.current_contact
+    # ===== 加载历史记录 =====
+    st.session_state.chat_history = load_json("chat_history.json", {})
+
+    current = st.session_state.get("current_contact", None)
+
+    # 防止没选联系人
+    if not current:
+        st.session_state.page = "chat"
+        st.rerun()
 
     st.title(f"🗨 {current}")
 
@@ -216,17 +295,16 @@ elif st.session_state.page == "chat_detail":
         st.rerun()
 
     # ===== 初始化 =====
-    if "chat_history" not in st.session_state:
-        st.session_state.chat_history = {}
-
     if current not in st.session_state.chat_history:
         st.session_state.chat_history[current] = []
 
     if "opened" not in st.session_state:
         st.session_state.opened = {}
 
-    # ===== 自动开场 =====
+    # ===== 自动开场（只触发一次）=====
     if not st.session_state.opened.get(current, False):
+
+        st.session_state.opened[current] = True
 
         persona = st.session_state.contacts[current]
 
@@ -247,10 +325,10 @@ elif st.session_state.page == "chat_detail":
             "role": "assistant",
             "content": reply
         })
+        
 
-        st.session_state.opened[current] = True
-
-        st.rerun()
+        # ⭐ 保存
+        save_json("chat_history.json", st.session_state.chat_history)
 
     # ===== 显示聊天记录 =====
     for msg in st.session_state.chat_history[current]:
@@ -262,7 +340,7 @@ elif st.session_state.page == "chat_detail":
                 <div style="
                     display: inline-block;
                     background-color: #FFFFFF;
-                    color:#d384a5 ;
+                    color:#d384a5;
                     padding: 8px 12px;
                     border-radius: 12px;
                     margin: 5px;
@@ -299,37 +377,46 @@ elif st.session_state.page == "chat_detail":
             "role": "user",
             "content": user_input
         })
+        
+        # 先保存用户消息
+        save_json("chat_history.json", st.session_state.chat_history)
 
-        # 没key提示
-        # 没key提示
+        # ===== 没 key =====
         if not st.session_state.get("api_key"):
-          st.warning("请先去设置页填写 API Key")
-          st.stop()
+
+            st.warning("请先去设置页填写 API Key")
+            st.stop()
 
         recent_song = st.session_state.get("recent_song", "暂无")
 
         persona = f"""
+        当前时间：{now}
+
         {st.session_state.contacts[current]}
 
         用户最近在听：{recent_song}
 
-        你可以自然地提到这个信息，
-        但不要每句话都提。
+        请根据当前时间调整语气：
+         - 早上更温柔、轻一点
+         - 晚上更安静、陪伴感强
         """
 
         messages = [
             {"role": "system", "content": persona}
         ] + st.session_state.chat_history[current]
 
-        # 思考中
+        # ===== AI 回复 =====
         with st.spinner(f"{current} 正在输入..."):
+
             reply = call_api(messages)
 
-        # AI回复
         st.session_state.chat_history[current].append({
             "role": "assistant",
             "content": reply
         })
+
+        # 再保存 AI 回复
+        save_json("chat_history.json", st.session_state.chat_history)
 
         st.rerun()
 
@@ -596,3 +683,96 @@ elif st.session_state.page == "settings":
         json.dump({"api_key": api_key_input}, f)
 
     st.success("已保存")
+# =====================
+#  📚 聊天记录
+# =====================
+elif st.session_state.page == "history":
+
+    st.title("📚 聊天记录")
+
+    # ===== 返回 =====
+    if st.button("← 返回桌面"):
+        st.session_state.page = "home"
+        st.rerun()
+
+    st.divider()
+
+    # ===== 安全初始化 =====
+    if "contacts" not in st.session_state:
+        st.session_state.contacts = {}
+
+    
+
+    # ===== 没有联系人 =====
+    if len(st.session_state.contacts) == 0:
+        st.info("还没有任何联系人")
+        st.stop()
+
+    # ===== 选择联系人 =====
+    st.markdown("### 选择一个人查看聊天")
+
+    selected = st.selectbox(
+        "联系人",
+        list(st.session_state.contacts.keys())
+    )
+
+    # ===== 查看按钮 =====
+    if st.button("查看聊天记录"):
+
+        st.session_state.current_contact = selected
+        st.session_state.page = "chat_detail"
+        st.rerun()
+
+    st.divider()
+
+    # ===== 显示该人的聊天记录（只读预览）=====
+    st.markdown(f"### 💬 {selected} 的记录预览")
+
+    history = st.session_state.chat_history.get(selected, [])
+
+    if not history:
+        st.write("暂无聊天记录")
+    else:
+        for msg in history[-30:]:  # 只看最近30条
+
+            if msg["role"] == "user":
+                st.markdown(f"""
+                <div style="text-align:right;">
+                    <div style="
+                        display:inline-block;
+                        background:#fff;
+                        color:#d384a5;
+                        padding:6px 10px;
+                        border-radius:10px;
+                        margin:4px;
+                    ">
+                        {msg["content"]}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            else:
+                st.markdown(f"""
+                <div style="text-align:left;">
+                    <div style="
+                        display:inline-block;
+                        background:#d384a5;
+                        color:white;
+                        padding:6px 10px;
+                        border-radius:10px;
+                        margin:4px;
+                    ">
+                        {msg["content"]}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+
+    st.divider()
+
+    # ===== 清空聊天（危险操作）=====
+    if st.button("🧹 清空这个人的聊天记录"):
+
+        if selected in st.session_state.chat_history:
+            st.session_state.chat_history[selected] = []
+
+        st.success("已清空")
