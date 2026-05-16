@@ -5,7 +5,8 @@ import requests
 import datetime
 import os
 import os
-
+import re
+import time
 # ===== 读取JSON =====
 def load_json(file, default):
 
@@ -41,7 +42,7 @@ def update_memory(user, user_input):
             st.session_state.memory[user] = {"facts": []}
 
     # 简单记忆规则（你之后可以再优化）
-          if any(keyword in user_input for keyword in ["我喜欢", "我讨厌", "我不喜欢", "我怕", "我想"]):
+          if any(keyword in user_input for keyword in ["我喜欢", "我讨厌", "我不喜欢", "我怕", "我想","帮我记","要记得","不许","不要"]):
              st.session_state.memory[user]["facts"].append(user_input)
 
     # 限制长度
@@ -49,7 +50,8 @@ def update_memory(user, user_input):
             st.session_state.memory[user]["facts"][-20:]
 
           save_json("memory.json", st.session_state.memory)
-
+def save_context():
+    save_json("context.json", st.session_state.context)
 st.set_page_config(page_title="My AI Phone")
 now = datetime.datetime.now().strftime("%H:%M")
 st.markdown(f"📶  WiFi   🔋 100%   {now}")
@@ -192,6 +194,15 @@ if "chat_history" not in st.session_state:
     )
 if "memory" not in st.session_state:
     st.session_state.memory = load_json("memory.json", {})
+if "context" not in st.session_state:
+    st.session_state.context = load_json("context.json", {
+        "status": "",
+        "mood": "",
+        "activity": "",
+        "note": ""
+    })
+if "pending_reply" not in st.session_state:
+    st.session_state.pending_reply = False
 # =====================
 # 📱 首页（手机桌面）
 # =====================
@@ -386,15 +397,25 @@ elif st.session_state.page == "chat_detail":
 
     if user_input:
 
-        # 用户消息
+       
+        # ===== 用户消息 =====
         st.session_state.chat_history[current].append({
             "role": "user",
             "content": user_input
-        })
-        
-        # 先保存用户消息
-        save_json("chat_history.json", st.session_state.chat_history)
+         })
 
+        save_json(
+            "chat_history.json",
+            st.session_state.chat_history
+        )
+
+         # ===== 保存待回复状态 =====
+        st.session_state.pending_reply = True
+
+        st.rerun()
+       
+
+    if st.session_state.pending_reply:
         # ===== 没 key =====
         if not st.session_state.get("api_key"):
 
@@ -430,7 +451,14 @@ elif st.session_state.page == "chat_detail":
         f"{m['role']}: {m['content']}"
         for m in history
         ])
+        context = st.session_state.context
 
+        context_text = f"""
+        状态：{context.get('status','')}
+        情绪：{context.get('mood','')}
+        活动：{context.get('activity','')}
+        备注：{context.get('note','')}
+        """
         messages = [
         {
         "role": "system",
@@ -443,34 +471,89 @@ elif st.session_state.page == "chat_detail":
 
         【近期对话】
          {history_text}
-
+         【用户当前状态】
+         {context_text}
         【时间规则】
         {time_rule}
-        必须严格遵守时间规则，不可在下午出先清晨，其他时间也是如此
-        规则：
-        - 不要忽冷忽热
-        - 保持人格一致
-        - 必须参考长期记忆
-        """
+        【输出规则】
+        首要规则：必须严格遵守时间规则，你的发言必须跟当前时间一致！
+        在回复之前，先判断本轮回答类型：
+        - 简短回应（3～5句）：日常聊天、情绪回应、简单问题
+        - 中等回应（6～10句）：解释类问题
+        - 长回应（10句以上）：用户明确要求深入分析
+
+         无论任何情况，都优先控制表达简洁，不允许无意义扩写。
+        不要忽冷忽热
+        保持人格一致
+        必须参考长期记忆
+        【角色设定（不可打破）】
+         你正在扮演游戏角色XXX，你的所有回应必须保持该角色身份。
+         不能跳出设定，不能提及现实身份或系统。
+         禁止闪回前面的话题，突然转移话题，不允许虚构用户目前的状态比如说困倦饥饿
+         禁止欲言又止，把话说完整。禁止在动作里运用比喻
+         【角色行为方式】
+          保持角色语气、世界观、价值观一致。
+          你的回复要符合微信日常聊天感觉，不要在"()"里描写你的动作
+          
+
+          规则：
+          - 你可以理解现实，但不能把现实写进角色世界
+          - 不允许角色“知道自己是AI或在聊天系统里”
+          - 不允许出戏
+         """
         }
         ]
+
+        
 
         # ===== AI 回复 =====
         with st.spinner(f"{current} 正在输入..."):
 
-            update_memory(current, user_input)
+            update_memory(
+                current,
+                 history[-1]["content"]
+            )
             reply = call_api(messages)
-            
 
-        st.session_state.chat_history[current].append({
-            "role": "assistant",
-            "content": reply
-        })
-        
+        parts = re.split(r'(?<=[。！？…])', reply)
 
-        # 再保存 AI 回复
-        save_json("chat_history.json", st.session_state.chat_history)
+        # ===== 流式显示 =====
+        with st.chat_message("assistant"):
 
+            placeholder = st.empty()
+
+            full_text = ""
+
+            for part in parts:
+
+                part = part.strip()
+
+                if part:
+
+                    full_text += part + "\n\n"
+
+                    placeholder.markdown(full_text)
+
+                    time.sleep(0.8)
+
+         # ===== 保存到聊天记录 =====
+        for part in parts:
+
+            part = part.strip()
+
+            if part:
+
+             st.session_state.chat_history[current].append({
+                "role": "assistant",
+                "content": part
+               })
+
+        # ===== 保存 json =====
+        save_json(
+            "chat_history.json",
+            st.session_state.chat_history
+        )
+        st.session_state.pending_reply = False
         st.rerun()
 
     
@@ -747,6 +830,64 @@ You know what next is back seat
 
 
 """
+        },
+        {
+            "name": " Ivoris- kiss me more",
+            "file": "kissmemore.mp3",
+            "lyric": """
+kiss me more - Ivoris
+Composed by：Doja Cat/SZA
+We hug and yes we make love
+And always just say goodnight
+La-la-la-la-la-la-la
+And we cuddle sure I do love it
+But I need your lips on mine
+Can you kiss me more
+We're so young boy we ain't got nothin' to lose uh-oh
+It's just principle
+Baby hold me 'cause I like the way you move uh-oh
+Boy you write your name I can do the same
+Oh I love the taste la-la-la-la-la-la
+La-la-la-la-la-la
+Boy you write your name I can do the same
+Oh I love the taste la-la-la-la-la-la
+La-la-la-la-la-la
+Say give me a buck need that gushy stuff
+Push the limit no you ain't good enough
+All your boys say that you lost without me
+All my girls feel like I dodged the county
+Curfew with you feel like jail boy
+I can't even exhale boy
+Cookie like holy grail you know that
+You gon' make me need bail you know that
+Caught dippin' with your friend
+You ain't even half man lyin' on your you know that
+Got me a bag full of brick you know that
+Control don't slow the pace if I throw back
+All this cash for real
+All this cash
+Drama make you feel
+Make you feel
+Fantasy and whip appeal is all I can give you
+Kiss me more
+We're so young boy we ain't got nothin' to lose uh-oh
+It's just principle
+Baby hold me 'cause I like the way we move uh-oh
+Boy you write your name I can do the same
+Oh I love the taste la-la-la-la-la la-la-la-la-la-la
+Boy you write your name I can do the same
+Oh I love the taste la-la-la-la-la la-la-la-la-la-la
+I love the taste
+I love the
+We hug and yes we make love
+And always just say goodnight
+I love the
+And we cuddle sure I do love it
+But I need your lips on mine
+
+
+
+"""
         }
 
     ]
@@ -882,6 +1023,26 @@ elif st.session_state.page == "settings":
         json.dump({"api_key": api_key_input}, f)
 
     st.success("已保存")
+    st.subheader("🧠 当前状态")
+
+    st.session_state.context["status"] = st.text_input(
+       "当前在做什么",
+        st.session_state.context.get("status", "")
+    )
+
+    st.session_state.context["mood"] = st.text_input(
+        "当前情绪",
+        st.session_state.context.get("mood", "")
+    )
+
+    st.session_state.context["activity"] = st.text_input(
+        "当前活动",
+        st.session_state.context.get("activity", "")
+    )
+
+    if st.button("保存状态"):
+       save_context()
+       st.success("已保存")
 # =====================
 #  📚 聊天记录
 # =====================
@@ -976,3 +1137,4 @@ elif st.session_state.page == "history":
             st.session_state.chat_history[selected] = []
 
         st.success("已清空")
+    
